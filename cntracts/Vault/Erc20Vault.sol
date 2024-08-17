@@ -4,13 +4,14 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./YieldManager.sol";
 import "./AssetManager.sol";
 import "./DAOManager.sol";
 import "./InsuranceFund.sol";
 import "./NotificationSystem.sol";
 
-contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
+contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     uint256 public totalPoints;
@@ -25,6 +26,10 @@ contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
     NotificationSystem public notificationSystem;
 
     mapping(address => uint256) public lastClaimBlock;
+
+    event Deposited(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event YieldClaimed(address indexed user, uint256 amount);
 
     constructor(
         address _principalAsset,
@@ -43,15 +48,19 @@ contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
     }
 
     function deposit(uint256 amount) external nonReentrant {
+        require(amount > 0, "Amount must be greater than zero");
         _claimYield(msg.sender);
         assetManager.acceptAsset(msg.sender, amount);
         _mint(msg.sender, amount);
+        emit Deposited(msg.sender, amount);  // Event emitted after deposit
     }
 
     function withdraw(uint256 amount) external nonReentrant {
+        require(amount > 0, "Amount must be greater than zero");
         _claimYield(msg.sender);
         assetManager.transferAsset(msg.sender, amount);
         _burn(msg.sender, amount);
+        emit Withdrawn(msg.sender, amount);  // Event emitted after withdrawal
     }
 
     function getClaimablePoints(address account) public view returns (uint256) {
@@ -66,6 +75,8 @@ contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
     }
 
     function _claimYield(address account) internal {
+        require(block.number > lastClaimBlock[account], "Cannot claim in the same block as deposit");
+
         uint256 claimablePoints = getClaimablePoints(account);
         uint256 availableYield = yieldManager.getAvailableYield();
 
@@ -79,6 +90,7 @@ contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
 
         if (claimableYield > 0) {
             yieldManager.distributeYield(account, claimableYield);
+            emit YieldClaimed(account, claimableYield);  // Event emitted after yield claim
         }
     }
 
@@ -88,5 +100,10 @@ contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard {
 
     function getAvailableYield() public view returns (uint256) {
         return yieldManager.getAvailableYield();
+    }
+
+    // Admin-only functions
+    function setYieldAsset(address newYieldAsset) external onlyOwner {
+        yieldManager.setYieldAsset(newYieldAsset);
     }
 }
