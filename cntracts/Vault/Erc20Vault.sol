@@ -11,7 +11,7 @@ import "./DAOManager.sol";
 import "./InsuranceFund.sol";
 import "./NotificationSystem.sol";
 
-contract Erc20Vault is ERC20("Principal", "PRPL"), ReentrancyGuard, Ownable {
+contract Erc20Vault is ERC20("VaultDefi", "VLD"), ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     uint256 public totalPoints;
